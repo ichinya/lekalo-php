@@ -53,6 +53,29 @@ function lekalo_build_json(string $bytes): object
     return $document;
 }
 
+/** Remove only a leading strict_types declaration, never text in a PHP literal. */
+function lekalo_build_fragment(string $source): string
+{
+    $fragment = substr($source, 6); $cursor = 0; $length = strlen($fragment);
+    while ($cursor < $length) {
+        $cursor += strspn($fragment, " \t\r\n", $cursor);
+        if (substr($fragment, $cursor, 2) === '/*') {
+            $end = strpos($fragment, '*/', $cursor + 2);
+            if ($end === false) { break; }
+            $cursor = $end + 2;
+        } elseif (substr($fragment, $cursor, 2) === '//' || substr($fragment, $cursor, 1) === '#') {
+            $end = strpos($fragment, "\n", $cursor);
+            if ($end === false) { break; }
+            $cursor = $end + 1;
+        } else { break; }
+    }
+    $declaration = "declare(strict_types=1);\n";
+    if (substr($fragment, $cursor, strlen($declaration)) === $declaration) {
+        return substr($fragment, 0, $cursor) . substr($fragment, $cursor + strlen($declaration));
+    }
+    return $fragment;
+}
+
 function lekalo_build_package(string $path, string $kind): array
 {
     if (is_link($path)) { throw new RuntimeException('package-link'); }
@@ -80,7 +103,7 @@ function lekalo_build_package(string $path, string $kind): array
         if ($total > 16 * 1024 * 1024) { throw new RuntimeException('package-content-bound'); }
         $files[$name] = 'sha256:' . hash('sha256', $source);
         // Fragments share the artifact's strict_types declaration.
-        $modules[$name] = preg_replace('/^declare\(strict_types=1\);\n/m', '', substr($source, 6));
+        $modules[$name] = lekalo_build_fragment($source);
     }
     foreach (get_object_vars($manifest->resources) as $constant => $name) {
         if (!preg_match('/^[A-Z][A-Z0-9_]{0,95}$/D', $constant) || !is_string($name)) {

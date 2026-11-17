@@ -77,6 +77,10 @@ try {
 <?php
 declare(strict_types=1);
 if (CUSTOM_POLICY !== "policy\n") { throw new RuntimeException('resource-not-bundled'); }
+$example = <<<'TEXT'
+declare(strict_types=1);
+TEXT;
+if ($example !== 'declare(strict_types=1);') { throw new RuntimeException('literal-was-rewritten'); }
 lekalo_provider_register([
     'id' => 'custom-rules', 'version' => '1.0.0', 'api' => PROVIDER_API_SCHEMA_VERSION,
     'capabilities' => ['lint.framework-semantics' => 'partial'],
