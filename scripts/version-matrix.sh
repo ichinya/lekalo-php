@@ -20,7 +20,7 @@ fi
 
 SUITES=("$@")
 if [ ${#SUITES[@]} -eq 0 ]; then
-  SUITES=(tests/protocol.php tests/analyzer.php)
+  SUITES=(tests/protocol.php tests/analyzer.php tests/composition.php)
 fi
 
 DOCKER=(docker)
