@@ -16,6 +16,47 @@
 | `tests/protocol.php` | Сюита протокола: 143 проверки, включая переговоры провайдеров с синтетическим фикстурным провайдером (критерий приёмки lekalo-php#1) и child-лег пустого реестра. |
 | `tests/analyzer.php` | Сюита analyzer-шва: 61 проверка. |
 | `main.php` | Source-режим без провайдера: `describe`/`scan`/типы/операции работают; framework-семейства отказывают типизированно (`provider-missing`). |
+| `lekalo.package.json` | Манифест сборки runtime: порядок PHP-модулей, ресурсы и версия provider API. |
+| `build.php`, `build-lib.php` | Сборщик самостоятельного артефакта из runtime и выбранных пакетов правил. |
+| `tests/composition.php` | Runtime без Laravel, сторонние rules, детерминизм, границы входов и конфликты providers. |
+
+## Независимая сборка runtime и правил
+
+```sh
+# PHP без framework-пакета: target=php, identity=lekalo-target-php
+php -n build.php --output /tmp/php-adapter.php
+
+# Совместимая Laravel-композиция; путь может указывать на любой checkout
+php -n build.php --rules ../lekalo-php-laravel \
+  --id lekalo-target-php-laravel --target php-laravel \
+  --output /tmp/laravel-adapter.php
+
+# Проверка сохранённых байтов без перезаписи
+php -n build.php --output /tmp/php-adapter.php --check
+php -n tests/composition.php
+```
+
+`--runtime DIR` выбирает другой runtime-пакет; `--rules DIR` можно повторить
+до восьми раз. Имена репозиториев не участвуют в выборе. Каждый каталог
+содержит `lekalo.package.json` со схемой `lekalo/php-package/v1`, ролью
+`runtime` или `rules`, `id`, `version`, `provider_api`, списком `modules`
+и объектом `resources` (имя PHP-константы → относительный файл).
+Модули — PHP-фрагменты с `<?php` и LF; они используют общие символы процесса
+и не должны требовать соседние файлы во время исполнения готового артефакта.
+
+Сборщик читает исходники как данные, закрепляет их SHA-256 в отчёте и
+сортирует пакеты правил по ID. Чужой код при сборке не исполняется.
+Несовместимый provider API, повторяющиеся ID, ссылки и выход за каталог
+отказывают до записи результата. Runtime регистрирует hooks правил через
+`lekalo_provider_register`; пересекающиеся одиночные capability families
+отказывают с `provider-capability-conflict`. Scenario runners объединяются
+отдельным API; одинаковые runner ID и разные defaults отказывают с
+`provider-runner-conflict`.
+
+Это манифест **сборки PHP-пакета**, а не публичный `adapter.manifest.json`
+или пользовательский `lekalo.yaml`. Загрузка из Git/registry, lock для
+проектных компонентов, выбор версии PHP-интерпретатора и родительский workspace
+остаются задачами #239/#241. `version: 0.1.0` — версия пакета, не PHP 8.0.
 
 ## Запуск
 
@@ -37,4 +78,6 @@ type-генератора целится в 8.2+ (`final readonly`) незави
 
 Сюита `lekalo-php-laravel` запускается из его репозитория и резолвит этот пакет через `../lekalo-php/src` (или переменную `LEKALO_PHP_SRC`).
 
-Статус: код перенесён из `adapters/php-laravel` монорепы (PR ichinya/lekalo#243); на переходном этапе совместимый артефакт собирается в единый `adapter.php` в монорепе из закреплённых (vendored) выпусков этого пакета и framework-пакетов.
+Статус: исходники и сборка принадлежат этому репозиторию. Монорепа вызывает
+закреплённый сборщик над vendored-пакетами для совместимого Laravel-артефакта;
+список модулей и ресурсов определяется манифестами пакетов.
