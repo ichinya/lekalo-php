@@ -1,4 +1,5 @@
 [
+  "crates/lekalo-core/tests/php_runtime_confinement.rs",
   "scripts/test-mago-integration.mjs",
   "tests/fixtures/mago"
 ]

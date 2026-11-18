@@ -56,6 +56,18 @@ jobs:
           # platform extensions; every dependency-free suite is unaffected.
           extensions: mbstring, openssl, pdo_sqlite, sqlite3, tokenizer, xml, dom, xmlwriter, ctype, fileinfo, iconv, session
         id: php
+      - name: Prepare the Linux isolation backend
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bubblewrap
+          bash .github/ci/bwrap-apparmor.sh load
+      - name: Verify the candidate PHP tokenizer in the host sandbox
+        if: runner.os != 'Windows'
+        run: cargo test --locked -p lekalo-core --test php_runtime_confinement
+      - name: Release the Linux AppArmor profile
+        if: always() && runner.os == 'Linux'
+        run: bash .github/ci/bwrap-apparmor.sh remove
       - name: Run the Mago integration gate, fake mode (issue #55)
         # Requires PHP but no Mago binary and no network: the receipt
         # decoder, the analysis states, and the strict-profile gates run
