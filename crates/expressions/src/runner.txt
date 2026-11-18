@@ -1,0 +1,51 @@
+
+function lekEncodeTyped($value, $ty) {
+  if ($ty === 'datetime') { return lekDtRender($value); }
+  if (strpos($ty, 'set:') === 0) { $inner = substr($ty, 4); $out = array(); foreach ($value as $item) { $out[] = lekEncodeTyped($item, $inner); } return $out; }
+  return $value;
+}
+$raw = stream_get_contents(STDIN);
+// The PHP decoder normalizes the negative-zero integer spelling
+// (-0) to integer 0, so it can no longer be detected at the typed
+// boundary: scan the raw document text for that exact number token
+// (outside strings) and refuse the document first, exactly like
+// the reference parse which preserves the spelling and refuses.
+if (lekHasNegativeZeroToken($raw)) { fwrite(STDERR, "lekalo vector input error\n"); exit(1); }
+// Objects decode as stdClass so the binding structure checks can
+// tell an object scope from an array, exactly like the reference.
+$doc = json_decode($raw);
+if (!is_object($doc) || !isset($doc->vectors) || !is_array($doc->vectors)) { fwrite(STDERR, "lekalo vector input error\n"); exit(1); }
+$results = array();
+foreach ($doc->vectors as $vector) {
+  // The consumed id is echoed into the result row, so only a
+  // primitive string id can reach the envelope: a null, number,
+  // boolean, object, array, or absent id refuses the document
+  // instead of emitting a malformed or id-less value row.
+  if (!is_object($vector) || !isset($vector->id) || !is_string($vector->id) || !isset($vector->expression) || !isset($vector->bindings)) { fwrite(STDERR, "lekalo vector input error\n"); exit(1); }
+  // Presence is distinct from value: only an omitted clock reads
+  // the epoch default, and an explicit null or malformed supplied
+  // clock refuses even when the body never reads it.
+  $clockPresent = property_exists($vector, 'clock');
+  $GLOBALS['LEK_ENV'] = array('clockText' => ($clockPresent ? $vector->clock : null), 'clockPresent' => $clockPresent, 'bindings' => $vector->bindings);
+  $row = array('id' => $vector->id);
+  try {
+    if ($clockPresent) { lekCheckClock($GLOBALS['LEK_ENV']['clockText']); }
+    // Only a primitive string selects an expression record: the
+    // selector is validated before any table lookup, so an array,
+    // object, or scalar can never be coerced into an expression
+    // name and computed. The supplied-clock check above keeps its
+    // first place on a double-fault vector (a null or absent
+    // selector already refused the document above).
+    if (!is_string($vector->expression)) { lekFail('expression-unknown'); }
+    if (!isset($LEK_PARAMS[$vector->expression])) { lekFail('expression-unknown'); }
+    lekValidateBindings($LEK_PARAMS[$vector->expression], $vector->bindings);
+    $fn = $LEK[$vector->expression];
+    $row['value'] = lekEncodeTyped($fn($GLOBALS['LEK_ENV']), $LEK_TYPES[$vector->expression]);
+  } catch (Throwable $e) {
+    unset($row['value']);
+    $msg = $e->getMessage();
+    $row['error'] = (is_string($msg) && preg_match('/^[a-z][a-z0-9-]*$/', $msg) === 1) ? $msg : 'runtime-error';
+  }
+  $results[] = $row;
+}
+fwrite(STDOUT, json_encode(array('results' => $results)) . "\n");

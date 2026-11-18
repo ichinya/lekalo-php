@@ -1,0 +1,268 @@
+
+$LEK = array();
+$LEK_TYPES = array();
+$LEK_PARAMS = array();
+$LEK_ENV = null;
+function lekFail($token) { throw new Exception($token); }
+function lekIntBound($v) { if ($v > 9007199254740991 || $v < -9007199254740991) { lekFail('int-overflow'); } return $v; }
+function lekAdd($a, $b) { $r = $a + $b; if (is_float($r)) { lekFail('int-overflow'); } return lekIntBound($r); }
+function lekSub($a, $b) { $r = $a - $b; if (is_float($r)) { lekFail('int-overflow'); } return lekIntBound($r); }
+function lekMul($a, $b) { $r = $a * $b; if (is_float($r)) { lekFail('int-overflow'); } return lekIntBound($r); }
+function lekDiv($a, $b) { if ($b === 0) { lekFail('divide-by-zero'); } $r = intdiv($a, $b); return lekIntBound($r); }
+function lekMod($a, $b) { if ($b === 0) { lekFail('modulo-by-zero'); } $r = $a % $b; if (is_float($r)) { lekFail('int-overflow'); } return lekIntBound($r); }
+function lekAbs($a) { return lekIntBound(abs($a)); }
+function lekDurBound($v) { if ($v > 31536000000 || $v < -31536000000) { lekFail('duration-overflow'); } return $v; }
+function lekDurAdd($a, $b) { $r = $a + $b; if (is_float($r)) { lekFail('duration-overflow'); } return lekDurBound($r); }
+function lekDurSub($a, $b) { $r = $a - $b; if (is_float($r)) { lekFail('duration-overflow'); } return lekDurBound($r); }
+function lekDurMul($a, $b) { $r = $a * $b; if (is_float($r)) { lekFail('duration-overflow'); } return lekDurBound($r); }
+function lekDurDiv($a, $b) { if ($b === 0) { lekFail('divide-by-zero'); } return lekDurBound(intdiv($a, $b)); }
+function lekDurSeconds($d) { return $d; }
+function lekCivil($z0) {
+  $z = $z0 + 719468;
+  $era = ($z >= 0 ? $z : $z - 146096) / 146097;
+  $era = $era >= 0 ? (int) floor($era) : (int) ceil($era);
+  $doe = $z - $era * 146097;
+  $yoe = ($doe - intdiv($doe, 1460) + intdiv($doe, 36524) - intdiv($doe, 146096)) / 365;
+  $yoe = $yoe >= 0 ? (int) floor($yoe) : (int) ceil($yoe);
+  $y = $yoe + $era * 400;
+  $doy = $doe - (365 * $yoe + intdiv($yoe, 4) - intdiv($yoe, 100));
+  $mp = intdiv(5 * $doy + 2, 153);
+  $d = $doy - intdiv(153 * $mp + 2, 5) + 1;
+  $m = $mp < 10 ? $mp + 3 : $mp - 9;
+  return array($m <= 2 ? $y + 1 : $y, $m, $d);
+}
+function lekFromCivil($y0, $m, $d) {
+  $y = $m <= 2 ? $y0 - 1 : $y0;
+  $era = ($y >= 0 ? $y : $y - 399) / 400;
+  $era = $era >= 0 ? (int) floor($era) : (int) ceil($era);
+  $yoe = $y - $era * 400;
+  $mp = $m > 2 ? $m - 3 : $m + 9;
+  $doy = intdiv(153 * $mp + 2, 5) + $d - 1;
+  $doe = $yoe * 365 + intdiv($yoe, 4) - intdiv($yoe, 100) + $doy;
+  return $era * 146097 + $doe - 719468;
+}
+function lekFloorDiv($a, $b) {
+  $q = intdiv($a, $b);
+  $r = $a % $b;
+  if ($r !== 0 && (($r < 0) !== ($b < 0))) { $q--; }
+  return $q;
+}
+function lekDaysInMonth($y, $m) {
+  if ($m === 2) { $leap = ($y % 4 === 0 && $y % 100 !== 0) || $y % 400 === 0; return $leap ? 29 : 28; }
+  return ($m === 4 || $m === 6 || $m === 9 || $m === 11) ? 30 : 31;
+}
+function lekValidFields($y, $mo, $d, $h, $mi, $s) {
+  if ($y < 1 || $y > 9999 || $mo < 1 || $mo > 12) { return false; }
+  if ($d < 1 || $d > lekDaysInMonth($y, $mo)) { return false; }
+  return $h <= 23 && $mi <= 59 && $s <= 59;
+}
+function lekDtRange($d) { $c = lekCivil(lekFloorDiv($d, 86400)); return $c[0] >= 1 && $c[0] <= 9999; }
+function lekDtAdd($d, $s) { $r = $d + $s; if (is_float($r) || !lekDtRange($r)) { lekFail('datetime-overflow'); } return $r; }
+function lekDtSub($d, $s) { $r = $d - $s; if (is_float($r) || !lekDtRange($r)) { lekFail('datetime-overflow'); } return $r; }
+function lekDtDiff($a, $b) { $r = $a - $b; if (is_float($r)) { lekFail('duration-overflow'); } return lekDurBound($r); }
+function lekYear($d) { return lekCivil(lekFloorDiv($d, 86400))[0]; }
+function lekMonth($d) { return lekCivil(lekFloorDiv($d, 86400))[1]; }
+function lekDay($d) { return lekCivil(lekFloorDiv($d, 86400))[2]; }
+function lekWeekday($d) { $days = lekFloorDiv($d, 86400); return (($days + 3) % 7 + 7) % 7 + 1; }
+function lekDtRender($d) {
+  $days = lekFloorDiv($d, 86400);
+  $time = (($d % 86400) + 86400) % 86400;
+  $c = lekCivil($days);
+  return sprintf('%04d-%02d-%02dT%02d:%02d:%02dZ', $c[0], $c[1], $c[2], intdiv($time, 3600), intdiv($time % 3600, 60), $time % 60);
+}
+function lekClock() {
+  $env = $GLOBALS['LEK_ENV'];
+  // Only an omitted clock reads the shared epoch default, exactly
+  // like the reference decode; an explicit null or any present
+  // noncanonical clock refuses with the closed clock token (the
+  // runner validates a supplied clock eagerly, before evaluation).
+  if (empty($env['clockPresent'])) { return 0; }
+  $f = lekCheckClock($env['clockText']);
+  return lekFromCivil($f[0], $f[1], $f[2]) * 86400 + $f[3] * 3600 + $f[4] * 60 + $f[5];
+}
+function lekCheckClock($text) {
+  if (!is_string($text)) { lekFail('clock-invalid'); }
+  $m = array();
+  if (!preg_match('/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z\z/', $text, $m)) { lekFail('clock-invalid'); }
+  $f = array((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5], (int) $m[6]);
+  if (!lekValidFields($f[0], $f[1], $f[2], $f[3], $f[4], $f[5])) { lekFail('clock-invalid'); }
+  return $f;
+}
+function lekField($scope, $field) {
+  // Scope members are objects; a non-object scope refuses instead of
+  // crashing the runner.
+  $bindings = $GLOBALS['LEK_ENV']['bindings'];
+  if (!is_object($bindings) || !property_exists($bindings, $scope)) { lekFail('binding-missing'); }
+  $scopeMap = $bindings->$scope;
+  if (!is_object($scopeMap) || !property_exists($scopeMap, $field)) { lekFail('binding-missing'); }
+  $v = $scopeMap->$field;
+  if ($v === null) { lekFail('binding-null'); }
+  return $v;
+}
+function lekGetBool($scope, $field) { return lekToBool(lekField($scope, $field)); }
+function lekGetInt($scope, $field) { return lekToInt(lekField($scope, $field)); }
+function lekGetStr($scope, $field) { return lekToStr(lekField($scope, $field)); }
+function lekGetDt($scope, $field) { return lekParseClockText(lekGetStr($scope, $field)); }
+function lekGetDur($scope, $field) { return lekToDur(lekField($scope, $field)); }
+function lekSetOf($v, $convert) {
+  if (!is_array($v)) { lekFail('binding-value'); }
+  if (count($v) > 64) { lekFail('binding-value'); }
+  $out = array();
+  foreach ($v as $item) { $out[] = $convert($item); }
+  usort($out, function ($a, $b) {
+    if (is_bool($a)) { return $a === $b ? 0 : ($a ? 1 : -1); }
+    if (is_string($a)) { return strcmp($a, $b); }
+    return $a < $b ? -1 : ($a > $b ? 1 : 0);
+  });
+  $n = count($out);
+  for ($i = 1; $i < $n; $i++) { if ($out[$i - 1] === $out[$i]) { lekFail('binding-value'); } }
+  return $out;
+}
+function lekToBool($v) { if (!is_bool($v)) { lekFail('binding-value'); } return $v; }
+function lekToInt($v) { if (!is_int($v) || $v > 9007199254740991 || $v < -9007199254740991) { lekFail('binding-value'); } return $v; }
+function lekToStr($v) { if (!is_string($v) || strlen($v) > 256 || !lekStrOk($v)) { lekFail('binding-value'); } return $v; }
+function lekToDur($v) { if (!is_int($v) || $v > 31536000000 || $v < -31536000000) { lekFail('binding-value'); } return $v; }
+function lekGetSetBool($scope, $field) { return lekSetOf(lekField($scope, $field), 'lekToBool'); }
+function lekGetSetInt($scope, $field) { return lekSetOf(lekField($scope, $field), 'lekToInt'); }
+function lekGetSetStr($scope, $field) { return lekSetOf(lekField($scope, $field), 'lekToStr'); }
+function lekGetSetDt($scope, $field) { return lekSetOf(lekField($scope, $field), 'lekParseClockText'); }
+function lekGetSetDur($scope, $field) { return lekSetOf(lekField($scope, $field), 'lekToDur'); }
+function lekParamGetter($ty) {
+  static $getters = array(
+    'bool' => 'lekGetBool',
+    'int' => 'lekGetInt',
+    'string' => 'lekGetStr',
+    'datetime' => 'lekGetDt',
+    'duration' => 'lekGetDur',
+    'set:bool' => 'lekGetSetBool',
+    'set:int' => 'lekGetSetInt',
+    'set:string' => 'lekGetSetStr',
+    'set:datetime' => 'lekGetSetDt',
+    'set:duration' => 'lekGetSetDur'
+  );
+  return isset($getters[$ty]) ? $getters[$ty] : 'lekFailInvalidParam';
+}
+function lekFailInvalidParam() { lekFail('binding-value'); }
+function lekValidateBindings($params, $bindings) {
+  // The eager per-record binding validation the reference performs
+  // before evaluation, in exactly the reference pass order: first
+  // every scope name and scope shape, then every field name across
+  // all scopes, then every declared parameter value — presence
+  // (even for nullable references), nullability, and every typed
+  // value, including values on branches the body never takes.
+  if (!is_object($bindings)) { lekFail('bindings-shape'); }
+  $scopes = array_keys((array) $bindings);
+  sort($scopes, SORT_STRING);
+  foreach ($scopes as $scope) {
+    if ($scope !== 'input' && $scope !== 'actor' && $scope !== 'entity' && $scope !== 'result') { lekFail('binding-unknown'); }
+    if (!is_object($bindings->$scope)) { lekFail('bindings-shape'); }
+  }
+  foreach ($scopes as $scope) {
+    $fields = array_keys((array) $bindings->$scope);
+    sort($fields, SORT_STRING);
+    foreach ($fields as $field) {
+      $known = false;
+      foreach ($params as $p) { if ($p['s'] === $scope && $p['f'] === $field) { $known = true; break; } }
+      if (!$known) { lekFail('binding-unknown'); }
+    }
+  }
+  foreach ($params as $p) {
+    // property_exists is an own-member test: a declared field is
+    // never satisfied by anything but an actual decoded member.
+    if (!property_exists($bindings, $p['s']) || !property_exists($bindings->{$p['s']}, $p['f'])) { lekFail('binding-missing'); }
+    $v = $bindings->{$p['s']}->{$p['f']};
+    if ($v === null) { if (!$p['n']) { lekFail('binding-null'); } continue; }
+    $getter = lekParamGetter($p['t']);
+    $getter($p['s'], $p['f']);
+  }
+}
+function lekParseClockText($text) {
+  // Strict end-of-input anchors: a trailing newline is never part of
+  // a canonical timestamp.
+  $m = array();
+  if (!is_string($text) || !preg_match('/\A(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z\z/', $text, $m)) { lekFail('binding-value'); }
+  $f = array((int) $m[1], (int) $m[2], (int) $m[3], (int) $m[4], (int) $m[5], (int) $m[6]);
+  if (!lekValidFields($f[0], $f[1], $f[2], $f[3], $f[4], $f[5])) { lekFail('binding-value'); }
+  return lekFromCivil($f[0], $f[1], $f[2]) * 86400 + $f[3] * 3600 + $f[4] * 60 + $f[5];
+}
+function lekIsNull($scope, $field) {
+  $bindings = $GLOBALS['LEK_ENV']['bindings'];
+  return !is_object($bindings) || !property_exists($bindings, $scope) || !is_object($bindings->$scope) || !property_exists($bindings->$scope, $field) || $bindings->$scope->$field === null;
+}
+function lekNotNull($scope, $field) { return !lekIsNull($scope, $field); }
+function lekLen($s) {
+  $count = 0;
+  for ($i = 0; $i < strlen($s); $i++) {
+    if ((ord($s[$i]) & 0xC0) !== 0x80) { $count++; }
+  }
+  return $count;
+}
+function lekConcat($a, $b) { $s = $a . $b; if (strlen($s) > 256 || !lekStrOk($s)) { lekFail('concat-overflow'); } return $s; }
+function lekStrOk($s) {
+  if (preg_match('//u', $s) !== 1) { return false; }
+  for ($i = 0; $i < strlen($s); $i++) {
+    $o = ord($s[$i]);
+    if ($o < 0x20 || $o >= 0xF0) { return false; }
+  }
+  return true;
+}
+function lekLower($s) { $out = ''; for ($i = 0; $i < strlen($s); $i++) { $o = ord($s[$i]); $out .= ($o >= 65 && $o <= 90) ? chr($o + 32) : $s[$i]; } return $out; }
+function lekUpper($s) { $out = ''; for ($i = 0; $i < strlen($s); $i++) { $o = ord($s[$i]); $out .= ($o >= 97 && $o <= 122) ? chr($o - 32) : $s[$i]; } return $out; }
+function lekCmpStr($a, $b) { return strcmp($a, $b); }
+function lekContains($a, $b) { return strpos($a, $b) !== false; }
+function lekStartsWith($a, $b) { return strncmp($a, $b, strlen($b)) === 0; }
+function lekEndsWith($a, $b) { $n = strlen($b); return $n === 0 || substr($a, -$n) === $b; }
+function lekIntToStr($n) { return (string) $n; }
+function lekStrToInt($s) {
+  if (!preg_match('/^-?(0|[1-9][0-9]{0,15})$/', $s)) { lekFail('cast-invalid'); }
+  $v = (int) $s;
+  if ($v > 9007199254740991 || $v < -9007199254740991) { lekFail('cast-invalid'); }
+  return $v;
+}
+function lekHasBool($v, $items) { return in_array($v, $items, true); }
+function lekHasInt($v, $items) { return in_array($v, $items, true); }
+function lekHasStr($v, $items) { return in_array($v, $items, true); }
+function lekHasDt($v, $items) { return in_array($v, $items, true); }
+function lekHasDur($v, $items) { return in_array($v, $items, true); }
+function lekSetLitBool(...$items) { return $items; }
+function lekSetLitInt(...$items) { return $items; }
+function lekSetLitStr(...$items) { return $items; }
+function lekSetLitDt(...$items) { return $items; }
+function lekSetLitDur(...$items) { return $items; }
+function lekSetLitAny(...$items) { return $items; }
+function lekFailInvalid() { lekFail('cast-invalid'); }
+function lekHasNegativeZeroToken($raw) {
+  $len = strlen($raw);
+  $inStr = false;
+  $i = 0;
+  while ($i < $len) {
+    $c = $raw[$i];
+    if (!$inStr) {
+      if ($c === '"') { $inStr = true; $i++; continue; }
+      $numeric = '0123456789.eE+-';
+      if ($c === '-' && $i + 1 < $len && $raw[$i + 1] === '0') {
+        $j = $i + 2;
+        // The exact token `-0` (a delimiter follows): the spelling
+        // the reference parse refuses. Longer spellings (-0.0,
+        // -0e2) are fractional/exponent forms the typed getters
+        // already refuse; digits directly after would not be valid
+        // JSON at all.
+        if ($j >= $len || strpos($numeric, $raw[$j]) === false) { return true; }
+        $i = $j;
+        while ($i < $len && strpos($numeric, $raw[$i]) !== false) { $i++; }
+        continue;
+      }
+      if (strpos($numeric, $c) !== false) {
+        $i++;
+        while ($i < $len && strpos($numeric, $raw[$i]) !== false) { $i++; }
+        continue;
+      }
+      $i++;
+      continue;
+    }
+    if ($c === '\\') { $i += 2; continue; }
+    if ($c === '"') { $inStr = false; }
+    $i++;
+  }
+  return false;
+}
