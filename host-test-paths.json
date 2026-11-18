@@ -1,0 +1,4 @@
+[
+  "scripts/test-mago-integration.mjs",
+  "tests/fixtures/mago"
+]
