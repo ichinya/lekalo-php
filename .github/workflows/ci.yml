@@ -1,0 +1,43 @@
+name: Package CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+jobs:
+  php:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: tokenizer
+          tools: none
+      - run: php -n tests/protocol.php
+      - run: php -n tests/analyzer.php
+      - run: php -n tests/composition.php
+      - name: Check reproducible runtime composition
+        run: |
+          php -n build.php --output "$RUNNER_TEMP/adapter.php"
+          php -n build.php --output "$RUNNER_TEMP/adapter.php" --check
+  services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --locked --manifest-path crates/discovery/Cargo.toml
+      - run: cargo test --locked --manifest-path crates/expressions/Cargo.toml
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ichinya/lekalo/.github/actions/test-official-package@6f5387d98092d73f011003e62c3a59859b7271e8
+        with:
+          package: lekalo-php
