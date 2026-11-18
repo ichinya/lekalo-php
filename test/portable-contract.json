@@ -1,0 +1,6 @@
+{
+  "rules": "gh/ichinya/lekalo-php-laravel#fbe7e8113344e22461bdb668d83c9828642a3c2d",
+  "path": "routes/web.php",
+  "valid": "<?php use Illuminate\\Support\\Facades\\Route as R; R::get('/health', function () {});",
+  "invalid": "<?php // no routes"
+}
