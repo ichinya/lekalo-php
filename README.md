@@ -6,7 +6,19 @@
 - Framework-пакеты (lekalo-php-laravel, lekalo-php-symfony) подключаются через versioned provider API — issue [#1](https://github.com/ichinya/lekalo-php/issues/1).
 - Общий план отделения — [ichinya/lekalo#241](https://github.com/ichinya/lekalo/issues/241).
 
-## Состав (stage 4, M2)
+## Подключение к проекту
+
+В каталоге приложения выполните:
+
+```sh
+lekalo init --runtime gh/ichinya/lekalo-php --rules gh/ichinya/lekalo-php-laravel --component-path routes
+lekalo runtime lock
+lekalo validate --strict
+```
+
+Публичный манифест `lekalo.package.json` поставляет `runtime/check.php` по протоколу `lekalo/runtime/v1`. Для запуска нужен PHP CLI 8.x с tokenizer. Версия пакета 0.2.0 независима от версии интерпретатора. Runtime читает статические регистрации в файлах из настройки `php.static-router/v1` выбранного пакета правил. Пакеты с одинаковыми требованиями могут использовать одну настройку. При конфликте настроек или неподдерживаемой конструкции runtime возвращает `partial`.
+
+## Состав PHP-адаптера
 
 | Путь | Содержимое |
 | --- | --- |
@@ -16,7 +28,7 @@
 | `tests/protocol.php` | Сюита протокола: 143 проверки, включая переговоры провайдеров с синтетическим фикстурным провайдером (критерий приёмки lekalo-php#1) и child-лег пустого реестра. |
 | `tests/analyzer.php` | Сюита analyzer-шва: 61 проверка. |
 | `main.php` | Source-режим без провайдера: `describe`/`scan`/типы/операции работают; framework-семейства отказывают типизированно (`provider-missing`). |
-| `lekalo.package.json` | Манифест сборки runtime: порядок PHP-модулей, ресурсы и версия provider API. |
+| `lekalo.php-build.json` | Манифест сборки runtime: порядок PHP-модулей, ресурсы и версия provider API. |
 | `build.php`, `build-lib.php` | Сборщик самостоятельного артефакта из runtime и выбранных пакетов правил. |
 | `tests/composition.php` | Runtime без Laravel, сторонние rules, детерминизм, границы входов и конфликты providers. |
 
@@ -38,7 +50,7 @@ php -n tests/composition.php
 
 `--runtime DIR` выбирает другой runtime-пакет; `--rules DIR` можно повторить
 до восьми раз. Имена репозиториев не участвуют в выборе. Каждый каталог
-содержит `lekalo.package.json` со схемой `lekalo/php-package/v1`, ролью
+содержит `lekalo.php-build.json` со схемой `lekalo/php-package/v1`, ролью
 `runtime` или `rules`, `id`, `version`, `provider_api`, списком `modules`
 и объектом `resources` (имя PHP-константы → относительный файл).
 Модули — PHP-фрагменты с `<?php` и LF; они используют общие символы процесса
@@ -53,10 +65,7 @@ php -n tests/composition.php
 отдельным API; одинаковые runner ID и разные defaults отказывают с
 `provider-runner-conflict`.
 
-Это манифест **сборки PHP-пакета**, а не публичный `adapter.manifest.json`
-или пользовательский `lekalo.yaml`. Загрузка из Git/registry, lock для
-проектных компонентов, выбор версии PHP-интерпретатора и родительский workspace
-остаются задачами #239/#241. `version: 0.1.0` — версия пакета, не PHP 8.0.
+Для старых сборочных пакетов сборщик также принимает имя `lekalo.package.json`. Версия legacy-композиции сохраняется в `lekalo.php-build.json`.
 
 ## Запуск
 

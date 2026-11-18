@@ -81,7 +81,10 @@ function lekalo_build_package(string $path, string $kind): array
     if (is_link($path)) { throw new RuntimeException('package-link'); }
     $root = realpath($path);
     if ($root === false || !is_dir($root)) { throw new RuntimeException('package-root'); }
-    $bytes = lekalo_build_read($root, 'lekalo.package.json', 65536);
+    // Existing third-party build packages may still use the original filename.
+    $name = 'lekalo.php-build.json';
+    if (!file_exists($root . '/' . $name) && !is_link($root . '/' . $name)) { $name = 'lekalo.package.json'; }
+    $bytes = lekalo_build_read($root, $name, 65536);
     $manifest = lekalo_build_json($bytes);
     $keys = array_keys(get_object_vars($manifest)); sort($keys);
     if ($keys !== ['id', 'kind', 'modules', 'provider_api', 'resources', 'schema', 'version']
