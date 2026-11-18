@@ -77,7 +77,18 @@ function contract_facts(object $input): object
     if ($input->rules === []) { return $facts; }
     $binding = null;
     foreach ($input->rules as $pack) {
+        $attributes = $pack->rules->bindings->{'php.attribute-router/v1'} ?? null;
         $reader = $pack->rules->bindings->{'php.static-router/v1'} ?? null;
+        if ($reader !== null && $attributes !== null) { throw new UnexpectedValueException('ambiguous-reader'); }
+        if ($attributes !== null) {
+            if ($binding !== null && ($attributeBinding ?? null) != $attributes) { throw new UnexpectedValueException('conflicting-reader'); }
+            if (!is_object($attributes) || !is_string($attributes->class ?? null) || !is_array($attributes->files ?? null)) {
+                throw new UnexpectedValueException('invalid-attribute-binding');
+            }
+            $attributeBinding = $attributes;
+            $binding = $attributes;
+            continue;
+        }
         if ($reader === null) { continue; }
         if (!is_object($reader) || !is_string($reader->class ?? null) || $reader->class === ''
             || !is_object($reader->methods ?? null) || !is_array($reader->files ?? null)
@@ -90,7 +101,13 @@ function contract_facts(object $input): object
     $routes = [];
     foreach ($input->files as $file) {
         if (in_array($file->path, $binding->files, true)) {
-            array_push($routes, ...read_routes(route_tokens($file->content), $binding));
+            $tokens = route_tokens($file->content);
+            if (isset($attributeBinding)) {
+                require_once __DIR__ . '/attribute-routes.php';
+                array_push($routes, ...attribute_routes($tokens, $binding));
+            } else {
+                array_push($routes, ...read_routes($tokens, $binding));
+            }
         }
     }
     usort($routes, static fn(array $a, array $b): int =>
@@ -107,8 +124,11 @@ try {
     $q = json_decode(stream_get_contents(STDIN), false, 512, JSON_THROW_ON_ERROR);
     if ($q->protocol !== 'lekalo/runtime/v1') { exit(2); }
     if ($q->operation === 'describe') {
-        $result = ['id' => 'lekalo-php', 'version' => '0.2.0',
-            'capabilities' => ['http.routes/v1'], 'operations' => ['check'], 'rules_api' => ['lekalo/contract-rules/v1']];
+        $result = ['id' => 'lekalo-php', 'version' => '0.3.0',
+            'capabilities' => ['http.routes/v1'], 'operations' => ['check', 'target.version'], 'rules_api' => ['lekalo/contract-rules/v1']];
+    } elseif ($q->operation === 'target.version') {
+        $version = $q->input->version;
+        $result = ['version' => $version, 'supported' => in_array($version, [PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION, PHP_VERSION], true)];
     } elseif ($q->operation === 'check') {
         try { $result = ['state' => 'complete', 'facts' => contract_facts($q->input)]; }
         catch (Throwable $e) { $result = ['state' => 'partial', 'facts' => new stdClass()]; }

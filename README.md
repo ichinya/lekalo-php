@@ -90,3 +90,5 @@ type-генератора целится в 8.2+ (`final readonly`) незави
 Статус: исходники и сборка принадлежат этому репозиторию. Монорепа вызывает
 закреплённый сборщик над vendored-пакетами для совместимого Laravel-артефакта;
 список модулей и ресурсов определяется манифестами пакетов.
+
+Install the expression generator with `cargo install --locked --path crates/expressions`. Select `services.expressions/php.command: [lekalo-expressions-php]` in the project configuration, lock it, then run `lekalo expressions render FILE --target php`.

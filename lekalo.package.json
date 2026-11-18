@@ -1,10 +1,11 @@
 {
   "schema": "lekalo/package/v1",
   "id": "lekalo-php",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "kind": "runtime",
   "files": [
-    "runtime/check.php"
+    "runtime/check.php",
+    "runtime/attribute-routes.php"
   ],
   "command": [
     "php",
