@@ -51,6 +51,11 @@ jobs:
         with:
           host: 9eb07ce8f21f96a9a160d382ac6280b9fa0fbcbe
 
+      - name: Verify the published PHP schemas
+        run: |
+          npm install --prefix "$RUNNER_TEMP/lekalo-php-schemas" --ignore-scripts --no-audit --no-fund --no-save ajv@8.20.0
+          NODE_PATH="$RUNNER_TEMP/lekalo-php-schemas/node_modules" node tests/contract-schemas.mjs
+
   expression-parity:
     runs-on: ubuntu-latest
     steps:

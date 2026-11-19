@@ -92,3 +92,10 @@ type-генератора целится в 8.2+ (`final readonly`) незави
 список модулей и ресурсов определяется манифестами пакетов.
 
 Install the expression generator with `cargo install --locked --path crates/expressions`. Select `services.expressions/php.command: [lekalo-expressions-php]` in the project configuration, lock it, then run `lekalo expressions render FILE --target php`.
+
+## Legacy target contracts
+
+The versioned JSON Schemas in [`contracts/`](contracts/) define the PHP types,
+operations, and routes families. Each family publishes its authored input,
+derived map, and observed evidence. Applications can pin these schemas from
+this repository independently of the Laravel compatibility adapter.
